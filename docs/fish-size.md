@@ -110,5 +110,5 @@
 
 ## 魚ごとのランクの下限
 
-魚ごとの値は[検索ページ](../index.html)で引ける。
-全部の値は [size_ranks.csv](../data/size_ranks.csv) にある。
+魚ごとの値は[検索ページ](../index.html)で検索できる。
+より詳細なデータは [size_ranks.csv](../data/size_ranks.csv) にある。
