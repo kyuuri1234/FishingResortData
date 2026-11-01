@@ -92,7 +92,6 @@ class Entry:
     fish: int
     p: tuple[int, int, int, int]
     w: tuple[float, float, float, float]
-    ghost: bool
 
 
 @dataclass
@@ -581,21 +580,21 @@ class Game:
         return out
 
     def free_table(self, area: str) -> dict[int, list[Entry]]:
-        """fishFree の出現表。枠番号 -> 行 (先頭はヘッダを読み違えて現れる行)."""
+        """fishFree の出現表。枠番号 -> 行."""
         d = (self.files / f"Fish/fishFree_{area}.bin").read_bytes()
         pos = 8
         out: dict[int, list[Entry]] = {}
         while pos < len(d):
-            head = struct.unpack_from(">8I4f", d, pos)
-            pos += 48
-            assert head[1] == 0xFFFFFFFF
-            rows = [Entry(head[3], head[4:8], head[8:12], True)]
-            for _ in range(head[2] - 1):
+            spot, end, count = struct.unpack_from(">3i", d, pos)
+            pos += 12
+            assert end == -1
+            rows = []
+            for _ in range(count):
                 e = struct.unpack_from(">5I4f", d, pos)
                 pos += 36
-                rows.append(Entry(e[0], e[1:5], e[5:9], False))
-            assert head[0] not in out
-            out[head[0]] = rows
+                rows.append(Entry(e[0], e[1:5], e[5:9]))
+            assert spot not in out
+            out[spot] = rows
         assert pos == len(d)
         return out
 
@@ -606,13 +605,13 @@ class Game:
         pos = 8
         out: dict[int, list[Entry]] = {}
         for g in range(n):
-            head = struct.unpack_from(">6I4fI", d, pos)
-            pos += 44
-            rows = [Entry(head[1], head[2:6], head[6:10], True)]
-            for _ in range(head[0] - 1):
+            count = struct.unpack_from(">i", d, pos)[0]
+            pos += 4
+            rows = []
+            for _ in range(count):
                 e = struct.unpack_from(">5I4fI", d, pos)
                 pos += 40
-                rows.append(Entry(e[0], e[1:5], e[5:9], False))
+                rows.append(Entry(e[0], e[1:5], e[5:9]))
             out[g] = rows
         assert pos == len(d)
         return out

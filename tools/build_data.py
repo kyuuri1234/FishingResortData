@@ -350,7 +350,7 @@ class Builder:
                                                ["---", "--:", "--:", "--:"])
 
     # --- トローリング ---------------------------------------------------------
-    def build_trolling(self) -> dict[int, list[tuple[int, int]]]:
+    def build_trolling(self) -> None:
         hit = self.g.troll_hit_table()
         rows = [[i + 1, TROLL_LURE[i].split(" ")[1]] + [f"{hit[i][c]:g}" for c in range(1, 13)] for i in range(5)]
         write_csv("trolling_lure_color.csv", ["lure", "look"] + [f"color{c}" for c in range(1, 13)], rows)
@@ -361,7 +361,6 @@ class Builder:
             ["---"] + ["--:"] * 12)
 
         fish_rows, sum_rows = [], []
-        routes: dict[int, list[tuple[int, int]]] = defaultdict(list)
         for g in range(10):
             entries = self.troll[g]
             for e in entries:
@@ -381,9 +380,6 @@ class Builder:
                         fish_rows.append([g, state, k + 1, f, self.name(f), w, f"{w / total:.4f}",
                                           f"{hit[k][self.by_id[f].base_color]:g}", f"{per[f]:.4f}",
                                           f"{per[f] / p:.4f}"])
-                if state == "unlocked":
-                    for f, w in cand.items():
-                        routes[f].append((g, w))
         write_csv("trolling_route_summary.csv", ["route", "sea", "stock_state", "lure", "hit_per_check",
                                                  "sec_per_bite_1rod", "sec_per_bite_5rods"], sum_rows)
         write_csv("trolling_route_fish.csv", ["route", "stock_state", "lure", "fish_id", "fish", "weight",
@@ -391,7 +387,6 @@ class Builder:
         paths = self.g.troll_paths()
         write_csv("trolling_routes.csv", ["route", "index", "x", "z"],
                   [[r, i, round(x, 1), round(z, 1)] for r, pts in enumerate(paths) for i, (x, z) in enumerate(pts)])
-        return routes
 
     # --- 体長とランク -----------------------------------------------------------
     def build_size(self) -> None:
@@ -446,17 +441,16 @@ class Builder:
             exps = sorted({f.exp for f in fs})
             rows.append([gr, len(fs), "・".join(str(e) for e in exps),
                          f"{wait1[gr][0]}〜{wait1[gr][1]}", f"{wait2[gr][0]}〜{wait2[gr][1]}",
-                         f"{coef[gr]:g}", f"{5 * coef[gr]:g}〜{15 * coef[gr]:g}", f"{run[gr]:g}",
-                         f"{radar[gr][0]}〜{radar[gr][1]}"])
+                         f"{coef[gr]:g}", f"{5 * coef[gr]:g}〜{15 * coef[gr]:g}", f"{run[gr]:g}"])
         self.tables["grade-table"] = md_table(
-            ["グレード", "魚の数", "経験値", "寄り始めるまでの時間(秒)", "ウキの下にいる時間(秒)", "つつく時間の係数", "つつく時間(秒)", "逃げる距離m", "レーダーの点の時間(秒)"],
-            rows, ["--:", "--:", "--:", ":-:", ":-:", "--:", ":-:", "--:", ":-:"])
+            ["グレード", "魚の数", "経験値", "寄り始めるまでの時間(秒)", "ウキの下にいる時間(秒)", "つつく時間の係数", "つつく時間(秒)", "逃げる距離m"],
+            rows, ["--:", "--:", "--:", ":-:", ":-:", "--:", ":-:", "--:"])
         self.tables["wait-table"] = md_table(
             ["グレード", "寄り始めるまでの時間(秒)", "ウキの下にいる時間(秒)", "つつく時間(秒)"],
             [[r[0], r[3], r[4], r[6]] for r in rows], ["--:", ":-:", ":-:", ":-:"])
         self.tables["radar-table"] = md_table(
             ["グレード"] + [str(g) for g in range(2, 6)],
-            [["点が映る時間(秒)"] + [f"{radar[g][0]}〜{radar[g][1]}" for g in range(2, 6)]], ["---"] + [":-:"] * 4)
+            [["表示時間(秒)"] + [f"{radar[g][0]}〜{radar[g][1]}" for g in range(2, 6)]], ["---"] + [":-:"] * 4)
         rc = self.g.nibble_rank_coef()
         self.tables["nibble-rank"] = md_table(["ランク"] + list(RANKS), [["係数"] + [f"{v:g}" for v in rc]],
                                               ["---"] + ["--:"] * 6)
@@ -618,31 +612,6 @@ class Builder:
         write_csv("fish_lure_types.csv", ["fish_id", "fish", "type", "size_min_cm", "size_max_cm", "coverage"], rows)
         write_csv("s_only_lures.csv", ["fish_id", "fish", "lure_id", "lure", "pass_min_cm", "pass_max_cm"], s_rows)
 
-    # --- 出現表の見出しの行で出る魚 ---------------------------------------------
-    def build_head_rows(self, routes: dict[int, list[tuple[int, int]]]) -> None:
-        body, head = set(), defaultdict(set)
-        for area, table in self.free.items():
-            for s, entries in table.items():
-                sp = self.spots[area][s]
-                if not (sp.has_rect and max(sp.caps) > 0):
-                    continue
-                for e in entries:
-                    if e.p[0] > 0:
-                        (head[e.fish].add(AREA_NAME[area]) if e.ghost else body.add(e.fish))
-        for g, entries in self.troll.items():
-            for e in entries:
-                if e.p[0] > 0:
-                    if e.ghost:
-                        head[e.fish].add(f"航路{g}" if g < 10 else "外海")
-                    else:
-                        body.add(e.fish)
-        rows = []
-        for f, where in sorted(head.items(), key=lambda kv: -self.by_id[kv[0]].points):
-            if f not in body and f not in self.never:
-                fish = self.by_id[f]
-                rows.append([fish.name, f"{fish.points:,}", "、".join(sorted(where))])
-        self.tables["head-only"] = md_table(["魚", "ポイント", "場所"], rows, ["---", "--:", "---"])
-
     # --- 受付嬢の話題 ----------------------------------------------------------
     def build_reception(self) -> None:
         topics = [("掲示板の目標の魚がいる", "目標の魚", 0x804F7474, 5, 0),
@@ -761,7 +730,7 @@ class Builder:
                   self.spot_rows)
         write_csv("spawn_rates.csv", ["area", "area_name", "spot", "fish_id", "fish", "weight", "pct_early",
                                       "pct_standard", "pct_all_unlocked", "unlock"], self.rate_rows)
-        routes = self.build_trolling()
+        self.build_trolling()
         self.build_fish(areas_of)
         self.build_lure()
         self.build_bait()
@@ -772,7 +741,6 @@ class Builder:
         self.build_fight()
         self.build_weather()
         self.build_fit(areas_of)
-        self.build_head_rows(routes)
         self.build_density()
         self.build_reception()
         self.build_calendar()
