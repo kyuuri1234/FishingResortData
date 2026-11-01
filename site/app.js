@@ -13,7 +13,7 @@ const RAMP = ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95"];
 const CAPS = ["cap_morning", "cap_day", "cap_evening", "cap_night"];
 const VIEWS = [["fish", "魚"], ["map", "釣り場"], ["lure", "ルアー"], ["sure", "S確定"], ["route", "トローリング"]];
 
-const state = { quest: true, stock: false, weather: "晴れ", rods: 5, lureType: "", lureColors: [], zoom: 1 };
+const state = { quest: true, stock: false, weather: "晴れ", rods: 5, lureType: "", lureColors: [], zoom: 1, baitAdjust: 0 };
 const MARKS = { "ホテル": "H", "ワープ": "W" };
 let mapScroll = {};
 const D = {};
@@ -56,11 +56,16 @@ const groupBy = (rows, key) => {
 const spotKey = (area, spot) => `${area}/${spot}`;
 
 async function loadAll() {
-  const [fish, spots, rates, lures, scores, shift, lureTypes, trollFish, trollSum, trollColor, routes, frames, points, marks, sOnly, ranks] = await Promise.all([
+  const [fish, spots, rates, lures, scores, shift, lureTypes, trollFish, trollSum, trollColor, routes, frames, points, marks, sOnly, ranks, affinity, nibble, nibbleGrades, baitWeather] = await Promise.all([
     "fish.csv", "spots.csv", "spawn_rates.csv", "lures.csv", "lure_color_scores.csv", "color_shift.csv",
     "fish_lure_types.csv", "trolling_route_fish.csv", "trolling_route_summary.csv", "trolling_lure_color.csv",
     "trolling_routes.csv", "map_frames.csv", "fishing_points.csv", "map_marks.csv", "s_only_lures.csv", "size_ranks.csv",
+    "bait_affinity.csv", "nibble_bait_seconds.csv", "nibble_grades.csv", "bait_by_weather.csv",
   ].map(load));
+  D.serviceBait = new Map(affinity.filter((r) => +r.bait_id === 0 && +r.pattern === 0).map((r) => [+r.bait_group, +r.value]));
+  D.nibble = new Map(nibble.map((r) => [`${r.value}/${r.bait_adjust}`, +r.seconds]));
+  D.nibbleGrades = new Map(nibbleGrades.map((r) => [+r.grade, r]));
+  D.baitWeather = groupBy(baitWeather, (r) => +r.bait_group);
   D.ranks = new Map(ranks.map((r) => [+r.fish_id, r]));
   D.sOnlyByFish = groupBy(sOnly, (r) => +r.fish_id);
   D.marks = groupBy(marks, (m) => m.area);
@@ -117,6 +122,7 @@ function fixed(v, digits) {
 const pct = (v, digits = 1) => `${fixed(v, digits)}%`;
 const sizeText = (lo, hi) => (hi ? `${lo}〜${hi}cm` : `${lo}cm〜`);
 const capsText = (spot) => CAPS.map((c) => spot[c]).join(" / ");
+const adjustText = (v) => (+v > 0 ? `+${v}` : v);
 
 const tip = document.getElementById("tip");
 function bindTip(el, text) {
@@ -451,8 +457,72 @@ function viewSize(f) {
     h("td", { class: "num" }, `${(+r[`dex_${k}_cm`]).toFixed(2)}cm`));
   return [
     h("h2", null, "サイズとランク"),
-    h("p", { class: "note" }, `Sランクで湧く確率は、称号で${pct(r.s_pct_first_column, 2)}から${pct(r.s_pct_last_column, 2)}へ変わる。`),
+    h("p", { class: "note" }, `Sランクで湧く確率は、クラスで${pct(r.s_pct_first_column, 2)}から${pct(r.s_pct_last_column, 2)}へ変わる。`),
     h("div", { class: "narrow" }, table([["ランク"], ["結果画面の下限", "num"], ["図鑑の下限", "num"]], [..."SABCD"].map(row))),
+  ];
+}
+
+function spotRanges(nums) {
+  const out = [];
+  for (const n of [...nums].sort((a, b) => a - b)) {
+    const last = out.at(-1);
+    if (last && last[1] === n - 1) last[1] = n;
+    else out.push([n, n]);
+  }
+  return out.map(([lo, hi]) => (lo === hi ? String(lo) : `${lo}〜${hi}`)).join("、");
+}
+
+function viewBait(f) {
+  const id = +f.fish_id;
+  if (!D.ratesByFish.has(id) && D.trollByFish.has(id)) return [];
+  const column = { 1: "multiplier_adjust_plus1", 0: "multiplier_adjust_0", [-1]: "multiplier_adjust_minus" }[state.baitAdjust];
+  const group = D.baitWeather.get(+f.bait_group);
+  const baits = groupBy(group, (r) => r.bait);
+  const values = group.map((r) => +r[column]);
+  const low = Math.min(...values);
+  const span = Math.max(...values) - low;
+  return [
+    h("h2", null, "エサの相性"),
+    h("div", { class: "filters" }, seg("エサの補正", [[1, "+1"], [0, "0"], [-1, "-1、-2"]], state.baitAdjust, (v) => { state.baitAdjust = v; })),
+    table([["エサ"], ...WEATHERS.map((w) => [w, "num"])], [...baits].map(([bait, list]) => h("tr", null,
+      h("td", null, bait),
+      WEATHERS.map((w) => {
+        const m = +list.find((r) => r.weather === w)[column];
+        return heatCell(span > 0 ? (m - low) / span : 0, fixed(m, 2));
+      })))),
+  ];
+}
+
+function viewNibble(f) {
+  const id = +f.fish_id;
+  const value = D.serviceBait.get(+f.bait_group);
+  const plus = (adjust) => D.nibble.get(`${value}/${adjust}`) ?? 0;
+  const groups = new Map();
+  for (const { area, list } of fishPlaces(id)) {
+    for (const r of list) {
+      const seconds = plus(D.spots.get(spotKey(r.area, r.spot)).bait_adjust);
+      const key = `${area}/${seconds}`;
+      if (!groups.has(key)) groups.set(key, { area, seconds, spots: [] });
+      groups.get(key).spots.push(+r.spot);
+    }
+  }
+  if (!groups.size) return [];
+  const rows = [...groups.values()].sort((a, b) => b.seconds - a.seconds);
+  const floatFish = +f.grade < 3 ? plus(0) : null;
+  const base = D.nibbleGrades.get(+f.grade);
+  const time = (seconds) => `${+base.min_sec + seconds}〜${+base.max_sec + seconds}秒`;
+  const head = h("h2", null, "ウキをつつく時間");
+  const all = new Set(rows.map((g) => g.seconds));
+  if (floatFish != null) all.add(floatFish);
+  if (all.size === 1) return [head, h("dl", { class: "stats" }, h("div", null, h("dt", null, "ランクC以下"), h("dd", null, time(rows[0].seconds))))];
+  const split = (area) => rows.filter((g) => g.area === area).length > 1;
+  const row = (place, seconds) => h("tr", null, h("td", null, place), h("td", { class: "num" }, time(seconds)));
+  return [
+    head,
+    h("div", { class: "narrow" }, table([["釣り場"], ["ランクC以下", "num"]], [
+      ...rows.map((g) => row([h("a", { href: `#fish/${id}/${g.area}` }, D.areaName.get(g.area)), split(g.area) ? ` スポット ${spotRanges(g.spots)}` : ""], g.seconds)),
+      floatFish != null ? row("ウキに湧いた魚", floatFish) : null,
+    ])),
   ];
 }
 
@@ -477,20 +547,20 @@ function viewColors(f) {
     ...head,
     h("dl", { class: "stats" },
       h("div", null, h("dt", null, "基準色"), h("dd", null, colorChip(base))),
-      h("div", null, h("dt", null, "好むルアーの仕組み"), h("dd", null, MECHANISM[+f.mechanism])),
+      h("div", null, h("dt", null, "好むアピールの種類"), h("dd", null, MECHANISM[+f.mechanism])),
       h("div", null, h("dt", null, "ルアーに反応する確率"), h("dd", null, pct(f.lure_accept_rate * 100, 0)))),
     h("h3", null, "好きな色の確率 (%)"),
     h("div", { class: "note" }, h("span", { class: "colors" }, Object.keys(COLORS).map(colorChip))),
     colorTable,
     h("h3", null, "反応するルアーの体長"),
-    h("div", { class: "narrow" }, table([["系統"], ["体長の範囲"]], LURE_TYPES.filter((t) => ranges.has(t)).map((t) => h("tr", null,
+    h("div", { class: "narrow" }, table([["種類"], ["体長の範囲"]], LURE_TYPES.filter((t) => ranges.has(t)).map((t) => h("tr", null,
       h("td", { class: "nowrap" }, t),
       h("td", null, ranges.get(t).map((r) => sizeText(r.size_min_cm, r.size_max_cm) + (r.coverage === "part" ? "*" : "")).join("、")))))),
     h("h3", null, "使えるルアー"),
     h("div", { class: "filters" }, seg("天気", WEATHERS.map((w) => [w, w]), state.weather, (v) => { state.weather = v; })),
     lures.some((x) => x.sure) ? h("p", { class: "sure-note" }, h("b", { class: "badge" }, "S確定"), `のルアー ${lures.filter((x) => x.sure).length}本にかかれば、この魚は必ずSランクである (反応する体長 ${(+sure[0].pass_min_cm).toFixed(2)}〜${(+sure[0].pass_max_cm).toFixed(2)}cm)。`) : null,
-    h("p", { class: "note" }, "倍率は色の倍率の期待値で、仕組みが魚の好みと合うルアーは1.2倍した値である。「*」は一部の個体だけが反応するルアーである。"),
-    table([["ルアー"], ["系統"], ["色"], ["体長"], ["仕組み"], ["倍率"], ["倍率0の割合", "num"]],
+    h("p", { class: "note" }, "倍率は色の倍率の期待値で、アピールの種類が魚の好みと合うルアーは1.2倍した値である。「*」は一部の個体だけが反応するルアーである。"),
+    table([["ルアー"], ["種類"], ["色"], ["体長"], ["アピールの種類"], ["倍率"], ["倍率0の割合", "num"]],
       lures.map((x) => h("tr", { class: x.sure ? "is-sure" : null },
         h("td", { class: "nowrap" }, h("a", { href: `#lure/${x.l.lure_id}` }, x.l.name), x.sure ? h("b", { class: "badge" }, "S確定") : x.part ? " *" : ""),
         h("td", { class: "nowrap" }, x.l.type),
@@ -517,6 +587,8 @@ function viewFish(idText, area) {
     viewPlaces(id, area),
     viewTrollingOfFish(id),
     viewSize(f),
+    viewBait(f),
+    viewNibble(f),
     viewColors(f),
   ];
 }
@@ -547,7 +619,7 @@ function viewMap(areaArg, spotArg) {
         h("div", null, h("dt", null, "面積"), h("dd", null, `${(+picked.area_m2).toLocaleString("ja-JP")}m²`)),
         h("div", null, h("dt", null, "幅×奥行"), h("dd", null, `${(+picked.width_m).toFixed(0)}×${(+picked.depth_m).toFixed(0)}m`)),
         h("div", null, h("dt", null, "補充間隔"), h("dd", null, `${picked.refill_sec}秒`)),
-        h("div", null, h("dt", null, "エサの補正"), h("dd", null, +picked.bait_adjust > 0 ? `+${picked.bait_adjust}` : picked.bait_adjust))),
+        h("div", null, h("dt", null, "エサの補正"), h("dd", null, adjustText(picked.bait_adjust)))),
       h("div", { style: "height:8px" }),
       table([["魚"], ["確率"]], list.map((r) => h("tr", null,
         h("td", { class: "nowrap" }, h("a", { href: `#fish/${r.fish_id}/${area}` }, r.fish)),
@@ -602,8 +674,8 @@ function viewLure(idText) {
     h("dl", { class: "stats" },
       h("div", null, h("dt", null, "色"), h("dd", null, lureColors(l))),
       h("div", null, h("dt", null, "反応する体長"), h("dd", null, sizeText(l.size_min_cm, l.size_max_cm))),
-      h("div", null, h("dt", null, "系統"), h("dd", null, l.type)),
-      h("div", null, h("dt", null, "仕組み"), h("dd", null, MECHANISM[+l.mechanism])),
+      h("div", null, h("dt", null, "種類"), h("dd", null, l.type)),
+      h("div", null, h("dt", null, "アピールの種類"), h("dd", null, MECHANISM[+l.mechanism])),
       h("div", null, h("dt", null, "アピール基準"), h("dd", null, `${l.appeal_base_m}m`)),
       h("div", null, h("dt", null, "価格"), h("dd", null, l.price ? `${(+l.price).toLocaleString("ja-JP")}pt` : "-"))),
     h("h2", null, `反応する魚 (${fish.length}種)`),
@@ -612,10 +684,10 @@ function viewLure(idText) {
       h("a", { href: `#fish/${r.fish_id}` }, r.fish),
       D.sOnly.has(`${r.fish_id}/${l.lure_id}`) ? h("b", { class: "badge" }, "S確定") : r.coverage === "part" ? " *" : ""))),
     h("h2", null, `ルアーの一覧 (${shown.length}本)`),
-    h("div", { class: "filters" }, seg("系統", [["", "すべて"], ...LURE_TYPES.map((t) => [t, t])], state.lureType, (v) => { state.lureType = v; })),
+    h("div", { class: "filters" }, seg("種類", [["", "すべて"], ...LURE_TYPES.map((t) => [t, t])], state.lureType, (v) => { state.lureType = v; })),
     h("div", { class: "filters" }, colorFilter()),
     shown.length ? null : h("p", { class: "note" }, "この条件のルアーはない。"),
-    table([["ルアー"], ["系統"], ["色"], ["体長"], ["仕組み"], ["アピール", "num"]],
+    table([["ルアー"], ["種類"], ["色"], ["体長"], ["アピールの種類"], ["アピール", "num"]],
       shown.map((x) => h("tr", { class: x === l ? "is-pick" : null },
         h("td", { class: "nowrap" }, h("a", { href: `#lure/${x.lure_id}` }, x.name)),
         h("td", { class: "nowrap" }, x.type),
@@ -688,7 +760,7 @@ function viewRoute(arg) {
       h("div", null,
         h("h2", { style: "margin-top:0" }, "各色のかかりやすさ"),
         h("p", { class: "note" }, "竿を出して3分たったあとの値である。"),
-        table([["ルアー"], ["1回の抽選で当たる確率"], ["当たりまでの平均", "num"]],
+        table([["ルアー"], ["1回の抽選でヒットする確率"], ["ヒットまでの平均", "num"]],
           summary.map((r) => h("tr", null,
             h("td", { class: "nowrap" }, trollChip(+r.lure)),
             h("td", null, bar(r.hit_per_check * 100, maxHit * 100, pct(r.hit_per_check * 100))),

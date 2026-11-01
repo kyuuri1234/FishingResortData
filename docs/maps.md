@@ -7,22 +7,22 @@
 エリアの名前から、検索ページの地図を開ける。
 
 <!-- table:area-index -->
-| エリア | スポット数 | 上限の最大 | 魚の種類 |
-|---|--:|--:|--:|
-| [トゥマン・パラダイスビーチ](../index.html#map/Beach) | 50 | 64 | 41 |
-| [パナス・ジャングル](../index.html#map/Jungle) | 47 | 50 | 20 |
-| [ティドゥール・リバー](../index.html#map/RiverA) | 64 | 40 | 19 |
-| [カナン・レイク](../index.html#map/LakeA) | 78 | 60 | 22 |
-| [ケリキル・リバー](../index.html#map/RiverB) | 32 | 16 | 14 |
-| [サフィーア・ケイブ](../index.html#map/Bluecave) | 11 | 35 | 16 |
-| [ドゥアリブ・レイク](../index.html#map/LakeB) | 63 | 60 | 23 |
-| [マラム・ジャングル](../index.html#map/JungleB) | 31 | 60 | 18 |
-| [パチャール・ビーチ](../index.html#map/BeachB) | 31 | 45 | 29 |
-| [スンビラン・アイランド](../index.html#map/IslandA) | 22 | 26 | 23 |
-| [スプール・アイランド](../index.html#map/IslandB) | 23 | 20 | 15 |
-| [グナン・エス・リバー](../index.html#map/Submap01) | 5 | 20 | 4 |
-| [パータパ・リバー](../index.html#map/Submap03) | 7 | 20 | 3 |
-| [ラハージャ・レイク](../index.html#map/Submap04) | 4 | 15 | 6 |
+| エリア | スポット数 | 魚の種類 |
+|---|--:|--:|
+| [トゥマン・パラダイスビーチ](../index.html#map/Beach) | 50 | 41 |
+| [パナス・ジャングル](../index.html#map/Jungle) | 47 | 20 |
+| [ティドゥール・リバー](../index.html#map/RiverA) | 64 | 19 |
+| [カナン・レイク](../index.html#map/LakeA) | 78 | 22 |
+| [ケリキル・リバー](../index.html#map/RiverB) | 32 | 14 |
+| [サフィーア・ケイブ](../index.html#map/Bluecave) | 11 | 16 |
+| [ドゥアリブ・レイク](../index.html#map/LakeB) | 63 | 23 |
+| [マラム・ジャングル](../index.html#map/JungleB) | 31 | 18 |
+| [パチャール・ビーチ](../index.html#map/BeachB) | 31 | 29 |
+| [スンビラン・アイランド](../index.html#map/IslandA) | 22 | 23 |
+| [スプール・アイランド](../index.html#map/IslandB) | 23 | 15 |
+| [グナン・エス・リバー](../index.html#map/Submap01) | 5 | 4 |
+| [パータパ・リバー](../index.html#map/Submap03) | 7 | 3 |
+| [ラハージャ・レイク](../index.html#map/Submap04) | 4 | 6 |
 <!-- /table -->
 
 外海は[検索ページ](../index.html#map/Offshore)、トローリングは[トローリングのページ](trolling.md)にある。
