@@ -31,9 +31,15 @@ def main() -> int:
     check("南海岸のトローリングが毎週土日 (NPCの台詞)", all(south[f"week{k}"] == "土日" for k in range(1, 5)))
     check("大会が8種類", sum(r["contest"] == "1" for r in acts.values()) == 8)
     check("掲示板の目標が197件", len(rows(data / "board_targets.csv")) == 197)
+    app = (ROOT / "site/app.js").read_text(encoding="utf-8")
+    missing = [n for n in re.findall(r'"([\w]+\.csv)"', app) if not (data / n).exists()]
+    check("サイトが読む CSV がある", not missing, str(missing))
+    frames = rows(data / "map_frames.csv")
+    no_image = [r["area"] for r in frames if not (ROOT / "images/base" / f"{r['area']}.png").exists()]
+    check("サイトの地図の土台がある", not no_image and len(frames) == 15, str(no_image))
 
     pages = [ROOT / "README.md", ROOT / "data/README.md", ROOT / "tools/README.md",
-             *(ROOT / "docs").glob("*.md"), *(ROOT / "docs/areas").glob("*.md")]
+             *(ROOT / "docs").glob("*.md")]
     broken, empty = [], []
     for page in pages:
         text = page.read_text(encoding="utf-8")
@@ -47,18 +53,14 @@ def main() -> int:
     for page in pages:
         text = page.read_text(encoding="utf-8")
         for target, frag in re.findall(r"\]\(([^)#]*)#([^)]+)\)", text):
+            if target and not target.endswith(".md"):
+                continue
             dest = (page.parent / target) if target else page
             heads = re.findall(r"^#+ (.+)$", dest.read_text(encoding="utf-8"), re.M)
             if frag not in {slug(h) for h in heads}:
                 bad_anchor.append(f"{page.name}: {target}#{frag}")
     check("文書の見出しへのリンク", not bad_anchor, str(bad_anchor[:5]))
     check("文書の表が埋まっている", not empty, str(empty[:5]))
-    unbroken = []
-    for page in pages:
-        for line in page.read_text(encoding="utf-8").split("\n"):
-            if not line.startswith(("|", "#")) and re.search(r"。[)）」』]*\S", line):
-                unbroken.append(f"{page.name}: {line[:30]}")
-    check("句点ごとに改行されている", not unbroken, str(unbroken[:3]))
     polite = re.compile(r"(です|ます|ません|ました|でした)(。|$|\s*\||\s*\(|\s*\[)")
     style = []
     for page in pages:

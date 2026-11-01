@@ -1,6 +1,7 @@
 # 生成スクリプト
 
-`data/` の CSV、`docs/` の表、`docs/areas/`、`images/` は、ディスクのファイルからこのスクリプトで生成している。
+`data/` の CSV、`docs/` の表、`images/` は、ディスクのファイルからこのスクリプトで生成している。
+`index.html` と `site/` のサイトは、これらの CSV と `images/base/` を読んで表示するだけで、ゲームの値を持たない。
 ゲームのファイルがあれば、同じ結果になることを確かめられる。
 説明の文章は手で書いたもので、生成の対象ではない。
 
@@ -28,6 +29,8 @@
 | `files/Test/TrollingPath.bin` | トローリングの航路 |
 | `files/Text/TextData.dat` | ゲーム内の文言 |
 | `files/Stage/em*/FieldCollision/*` | 地形 |
+| `files/Stage/em*/FishingPoint/*` | 足場 |
+| `files/PosData/StagePosData.bin` | ホテルとワープ先の位置 |
 
 ## 手順
 
@@ -50,13 +53,14 @@
 | `gamedata.py` | ゲームのファイルと `main.dol` を読む |
 | `build_data.py` | CSV とページの表を生成する |
 | `depth_effect.py` | 水深と、水深が確率に与える影響を計算する |
-| `build_maps.py` | 地図を描く |
+| `build_maps.py` | 地図を描き、サイトの地図の土台と `data/map_frames.csv`、`data/fishing_points.csv`、`data/map_marks.csv` を出す |
 | `check_docs.py` | 文書のリンク、表、書式を検査する (ゲームのファイルは要らない) |
 
 ## 文書を直すとき
 
 説明の文章は `docs/` のページを直接編集する。
-`build_data.py` は `<!-- table:名前 -->` の間を書き換え、`docs/areas/` を丸ごと生成し、全ページを句点ごとに改行する。
+`build_data.py` は `<!-- table:名前 -->` の間を書き換える。
+説明の文章は読みやすさのために、できるだけ句点ごとに改行する。
 
 ## ライセンス
 

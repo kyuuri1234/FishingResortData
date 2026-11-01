@@ -1,14 +1,16 @@
-"""エリアのスポット地図と、トローリング・外海の地図を描く.
+"""サイトの地図の土台と、トローリングの地図を描く.
 
     python3 tools/build_maps.py --game <展開先>
 
 地形はステージの当たり判定 (FieldCollision) の三角形をそのまま塗ったもので、ゲームの画像は
 使っていない。枠の回転はゲームの行列 (Y軸回転) どおりに頂点を計算して描く。
+地図の向きは TURN でエリアごとに決める。
 """
 
 from __future__ import annotations
 
 import argparse
+import csv
 import struct
 from collections import Counter
 from pathlib import Path
@@ -21,7 +23,6 @@ import matplotlib.patheffects as pe
 import numpy as np
 from matplotlib.collections import PolyCollection
 from matplotlib.lines import Line2D
-from matplotlib.patches import Polygon
 from PIL import Image, ImageDraw
 
 from gamedata import AREA_NAME, AREA_ORDER, FREE_AREAS, Game, Spot
@@ -32,10 +33,17 @@ plt.rcParams["font.family"] = ["Noto Sans CJK JP", "DejaVu Sans"]
 
 LAND = "#e6dcc3"
 WATER = "#cfe4f2"
-SPOT = "#d1495b"
 ISLAND = "#c9b58a"
 SEA_X0, SEA_X1, SEA_PX = -3010.0, 2310.0, 1100
-SEA = {"トロピカル": "#e8a33d", "テンパレート": "#3f8f6b", "フリジッド": "#3c6fb0"}
+BASE_LONG_PX, BASE_DPI = 1100, 100
+# 時計回りの角度。書いていないエリアは右が -x、上が +z の向きである
+TURN = {
+    "Beach": 180, "RiverA": 180, "LakeA": 180, "RiverB": 180, "Bluecave": 180, "LakeB": 180, "BeachB": 180,
+    "IslandA": 180, "Submap01": 180, "Submap03": 180, "Submap04": 180, "JungleB": 90,
+}
+# 角度ごとの (右, 上) の、世界の (x, z) に掛ける係数。外海だけはゲームの世界地図の向きである
+VIEW = {0: ((-1, 0), (0, 1)), 180: ((1, 0), (0, -1)), 90: ((0, 1), (1, 0))}
+SEA_TURN = 180
 ROUTE_COLOR = ["#e6194b", "#f58231", "#808000", "#3cb44b", "#008080", "#4363d8", "#911eb4", "#f032e6", "#7f4f24", "#000075"]
 
 
@@ -91,40 +99,95 @@ def label(ax, x, y, text, size=8, color="#111", weight="bold", **kw) -> None:
             path_effects=[pe.withStroke(linewidth=2.5, foreground="white")], **kw)
 
 
-def area_map(game: Game, area: str, spots: list[Spot]) -> None:
-    tris = stage_tris(game, AREA_ORDER.index(area) + 1)
-    level = Counter(round(s.y, 2) for s in spots).most_common(1)[0][0]
-    corners = np.concatenate([spot_corners(s) for s in spots])
+def view(area: str, xz) -> np.ndarray:
+    """世界の (x, z) を、地図の (右, 上) にする."""
+    xz = np.asarray(xz, dtype=float)
+    (a, b), (c, d) = VIEW[TURN.get(area, 0)]
+    return np.stack((a * xz[..., 0] + b * xz[..., 1], c * xz[..., 0] + d * xz[..., 1]), axis=-1)
+
+
+def area_bounds(game: Game, area: str, spots: list[Spot]) -> tuple[np.ndarray, np.ndarray]:
+    marks = [(x, z) for _, x, z in game.map_marks(area)]
+    corners = view(area, np.concatenate([*(spot_corners(s) for s in spots), np.array(marks).reshape(-1, 2)]))
     lo, hi = corners.min(axis=0), corners.max(axis=0)
     pad = max(25.0, 0.06 * (hi - lo).max())
-    lo, hi = lo - pad, hi + pad
-    w, h = hi[0] - lo[0], hi[1] - lo[1]
-    size = 11.0
-    fig_w, fig_h = (size, max(4.5, size * h / w)) if w >= h else (max(5.5, size * w / h), size)
-    fig, ax = plt.subplots(figsize=(fig_w + 0.6, fig_h + 0.5))
+    return lo - pad, hi + pad
+
+
+def draw_terrain(ax, area: str, tris: np.ndarray, spots: list[Spot]) -> None:
+    level = Counter(round(s.y, 2) for s in spots).most_common(1)[0][0]
     ax.set_facecolor(LAND)
     ymax = tris[:, [1, 4, 7]].max(axis=1)
     ymin = tris[:, [1, 4, 7]].min(axis=1)
     water = tris[ymax <= level + 0.25]
     land = tris[ymin > level + 0.25]
-    ax.add_collection(PolyCollection(faces(water), facecolors=WATER, edgecolors=WATER, linewidths=0.2, zorder=1))
-    ax.add_collection(PolyCollection(faces(land), facecolors=LAND, edgecolors=LAND, linewidths=0.2, zorder=2))
-    for s in spots:
-        ax.add_patch(Polygon(spot_corners(s), closed=True, facecolor=SPOT, alpha=0.16, edgecolor="none", zorder=3))
-        ax.add_patch(Polygon(spot_corners(s), closed=True, fill=False, edgecolor=SPOT, linewidth=0.9, zorder=4))
-    for s in spots:
-        label(ax, s.x, s.z, str(s.spot), zorder=5)
-    ax.set_xlim(hi[0], lo[0])  # ゲームのエリア地図と同じく -x を右にする
-    ax.set_ylim(lo[1], hi[1])
-    ax.set_aspect("equal")
-    ax.set_title(f"{AREA_NAME[area]} のスポット", fontsize=13)
-    ax.set_xlabel("x (m)")
-    ax.set_ylabel("z (m)")
-    ax.grid(color="#00000014", linewidth=0.5, zorder=0)
-    fig.tight_layout()
-    (OUT / "maps").mkdir(parents=True, exist_ok=True)
-    fig.savefig(OUT / "maps" / f"{area}.png", dpi=130)
+    ax.add_collection(PolyCollection(view(area, faces(water)), facecolors=WATER, edgecolors=WATER, linewidths=0.2, zorder=1))
+    ax.add_collection(PolyCollection(view(area, faces(land)), facecolors=LAND, edgecolors=LAND, linewidths=0.2, zorder=2))
+
+
+def save_base(fig, name: str, turn: int, lo: np.ndarray, hi: np.ndarray) -> list:
+    """サイトの地図の土台を保存し、世界の (x, z) から画像の (px, py) への変換の行を返す."""
+    (OUT / "base").mkdir(parents=True, exist_ok=True)
+    fig.savefig(OUT / "base" / f"{name}.png", dpi=BASE_DPI)
     plt.close(fig)
+    w, h = fig.canvas.get_width_height()
+    sx, sy = w / (hi[0] - lo[0]), h / (hi[1] - lo[1])
+    (a, b), (c, d) = VIEW[turn]
+    return [name, w, h, turn, 1 / sx, a * sx, b * sx, -lo[0] * sx, -c * sy, -d * sy, hi[1] * sy]
+
+
+def area_base(game: Game, area: str, spots: list[Spot]) -> list:
+    """スポットもラベルもない地形だけの地図。スポットはサイトが座標から描く."""
+    tris = stage_tris(game, AREA_ORDER.index(area) + 1)
+    lo, hi = area_bounds(game, area, spots)
+    w, h = hi[0] - lo[0], hi[1] - lo[1]
+    scale = BASE_LONG_PX / BASE_DPI / max(w, h)
+    fig = plt.figure(figsize=(w * scale, h * scale), dpi=BASE_DPI)
+    ax = fig.add_axes([0, 0, 1, 1])
+    draw_terrain(ax, area, tris, spots)
+    ax.set_xlim(lo[0], hi[0])
+    ax.set_ylim(lo[1], hi[1])
+    ax.set_xticks([])
+    ax.set_yticks([])
+    for side in ax.spines.values():
+        side.set_visible(False)
+    return save_base(fig, area, TURN.get(area, 0), lo, hi)
+
+
+def sea_plain(game: Game) -> list:
+    fig = plt.figure(figsize=(BASE_LONG_PX / BASE_DPI, BASE_LONG_PX / BASE_DPI), dpi=BASE_DPI)
+    ax = fig.add_axes([0, 0, 1, 1])
+    sea_base(game, ax)
+    ax.set_aspect("auto")
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_xlabel("")
+    ax.set_ylabel("")
+    for side in ax.spines.values():
+        side.set_visible(False)
+    return save_base(fig, "Offshore", SEA_TURN, np.array([-3100.0, -2400.0]), np.array([2400.0, 3100.0]))
+
+
+def write_frames(frames: list) -> None:
+    with (ROOT / "data/map_frames.csv").open("w", encoding="utf-8", newline="") as f:
+        w = csv.writer(f, lineterminator="\n")
+        w.writerow(["area", "width_px", "height_px", "turn_deg", "m_per_px", "px_x", "px_z", "px_0", "py_x", "py_z", "py_0"])
+        for name, width, height, turn, *rest in frames:
+            w.writerow([name, width, height, turn, *(f"{float(v):.6f}" for v in rest)])
+
+
+def write_marks(rows: list) -> None:
+    with (ROOT / "data/map_marks.csv").open("w", encoding="utf-8", newline="") as f:
+        w = csv.writer(f, lineterminator="\n")
+        w.writerow(["area", "area_name", "kind", "x", "z"])
+        w.writerows(rows)
+
+
+def write_points(rows: list) -> None:
+    with (ROOT / "data/fishing_points.csv").open("w", encoding="utf-8", newline="") as f:
+        w = csv.writer(f, lineterminator="\n")
+        w.writerow(["area", "area_name", "x", "y", "z", "ux", "uz", "vx", "vz", "width_m", "depth_m", "height_m", "front_x", "front_z"])
+        w.writerows(rows)
 
 
 def components(mask: np.ndarray):
@@ -264,25 +327,6 @@ def start_map(game: Game, paths) -> None:
     plt.close(fig)
 
 
-def offshore_map(game: Game, zones: list[Spot]) -> None:
-    from gamedata import SEA_NAME
-    fig, ax = plt.subplots(figsize=(10.5, 10.2))
-    sea_base(game, ax)
-    for s in zones:
-        sea = SEA_NAME[s.table_group]
-        ax.add_patch(Polygon(spot_corners(s), closed=True, facecolor=SEA[sea], alpha=0.22, edgecolor=SEA[sea],
-                             linewidth=1.5, zorder=3))
-        x = min(max(s.x, -2850), 2150)
-        z = min(max(s.z, -2850), 2150)
-        label(ax, x, z, str(s.spot), size=15, color=SEA[sea], zorder=9)
-    ax.set_title("外海の区画 (ゲームの世界地図と同じ向き)", fontsize=13)
-    ax.legend(handles=[Line2D([], [], color=c, lw=6, alpha=0.5, label=n) for n, c in SEA.items()], ncol=3,
-              loc="lower center", bbox_to_anchor=(0.5, -0.1), frameon=False, fontsize=10)
-    fig.tight_layout()
-    fig.savefig(OUT / "trolling" / "offshore-zones.png", dpi=120)
-    plt.close(fig)
-
-
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--game", type=Path, required=True, help="ゲームのファイルの展開先")
@@ -293,18 +337,28 @@ def main() -> int:
     tables = {a: game.free_table(a) for a in FREE_AREAS}
     wanted = args.areas.split(",") if args.areas else FREE_AREAS
     (OUT / "trolling").mkdir(parents=True, exist_ok=True)
+    frames, points, marks = [], [], []
     for area in wanted:
         if area not in tables:
             continue
         active = [spots[area][s] for s in tables[area]
                   if spots[area][s].has_rect and max(spots[area][s].caps) > 0]
-        area_map(game, area, active)
+        frames.append(area_base(game, area, active))
+        points += [[area, AREA_NAME[area], *(f"{v:.2f}" for v in (p.x, p.y, p.z)),
+                    *(f"{v:.4f}" for v in (p.ux, p.uz, p.vx, p.vz)),
+                    *(f"{v:.2f}" for v in (p.width, p.depth, p.height)),
+                    *(f"{v:.4f}" for v in (p.front_x, p.front_z))]
+                   for p in game.fishing_points(AREA_ORDER.index(area) + 1)]
+        marks += [[area, AREA_NAME[area], kind, f"{x:.2f}", f"{z:.2f}"] for kind, x, z in game.map_marks(area)]
         print(area, len(active))
     if not args.areas:
         paths = game.troll_paths()
         route_map(game, paths)
         start_map(game, paths)
-        offshore_map(game, [s for s in spots["Wholeisland"].values() if s.has_rect])
+        frames.append(sea_plain(game))
+        write_frames(frames)
+        write_points(points)
+        write_marks(marks)
     return 0
 
 

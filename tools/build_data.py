@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import math
 import re
 import statistics
 import unicodedata
@@ -31,7 +30,6 @@ COLOR_NAME = {1: "黒", 2: "赤", 3: "赤橙", 4: "橙", 5: "桃・紫", 6: "茶
               9: "黄", 10: "オリーブ", 11: "緑", 12: "青"}
 TROLL_LURE = ["1番 赤橙", "2番 紫", "3番 黄", "4番 銀灰", "5番 水色"]
 ROD_CHECK_SEC = 7.5
-WAKASAGI = 53  # ミニゲーム専用の湧き方で、出現表を通らない
 LURE_SHORT = {"スプーン": "スプーン", "スピナー": "スピナー", "クランクベイト": "クランク",
               "バイブレーション": "バイブ", "ミノー": "ミノー"}
 MECHANISM = ["汎用", "ラトル", "振動"]
@@ -42,7 +40,7 @@ ODDS_ROW = 6  # 称号のレベル6つごとに重みの行が進む
 CAST_RATE = {0: 1.0, 1: 1.5, 2: 2.0}
 ROD_CLASS = ["LF", "MF", "HF", "X"]
 SIZE_LABEL = {3: "0〜70", 2: "20〜70", 6: "20〜200", 4: "50〜200", 12: "50〜", 8: "150〜"}
-SENTENCE_END = re.compile(r"(。[)）」』]*)(?=\S)")
+SENTENCE_END = re.compile(r"(。[)）」』]*)(?=[^\s(（])")
 
 def write_csv(name: str, header: list[str], rows: list[list]) -> None:
     with (DATA / name).open("w", encoding="utf-8", newline="") as f:
@@ -141,7 +139,7 @@ class Builder:
 
     # --- 魚 ----------------------------------------------------------------
     def build_fish(self, areas_of: dict[int, set[str]]) -> None:
-        rows, doc = [], []
+        rows = []
         for f in self.fish:
             b = size_borders(f) if f.base_cm > 0 else None
             types = [LURE_TYPES[i] for i in range(5) if f.lure_mask >> i & 1]
@@ -157,30 +155,17 @@ class Builder:
                          CATEGORY[self.category[f.id]], f.pull_class, *self.pulls[f.pull_class],
                          f.stamina, f.speed_coef, self.params[f.rush_index], f.rush_div,
                          self.params[f.speed_cap_index]])
-            if f.id in self.never:
-                continue
-            doc.append([f.name, f.grade, f"{f.base_cm:g}", f"{b['min']:.2f}〜{b['max']:.2f}",
-                        f"{b['s_result']:.2f}", f"{f.base_color} {COLOR_NAME.get(f.base_color, '')}",
-                        MECHANISM[f.mechanism], f.bait_group,
-                        ("全系統" if len(types) == 5 else "・".join(LURE_SHORT[t] for t in types)) or "なし",
-                        f"{GATE_RATE[f.gate_class] * 100:.0f}%" if types else "-", cond or note])
         write_csv("fish.csv", ["fish_id", "name", "grade", "points", "exp", "base_cm", "min_cm",
                                "max_cm", "s_min_result_cm", "s_min_dex_cm", "base_color",
                                "mechanism", "bait_group", "lure_types", "lure_accept_rate",
                                "unlock", "note", "areas", "hold", "pull_class", "pull_speed_a", "pull_speed_b",
                                "stamina", "speed_coef", "rush_threshold", "rush_div", "speed_cap"], rows)
-        doc.sort(key=lambda r: r[0])
         self.tables["junk-list"] = "、".join(self.name(i) for i in sorted(JUNK))
-        self.tables["fish-table"] = md_table(
-            ["魚", "格付け", "基準cm", "体長の範囲cm", "S下限cm", "基準色", "機構", "エサ群",
-             "反応するルアー", "反応率", "備考"], doc,
-            ["---", "--:", "--:", "---", "--:", "---", "---", "--:", "---", "--:", "---"])
 
     # --- 通常の釣り場 ------------------------------------------------------
     def build_spawn(self) -> dict[int, set[str]]:
         spot_rows, rate_rows, area_rows = [], [], []
         areas_of: dict[int, set[str]] = defaultdict(set)
-        fish_spots: dict[int, dict[str, list[tuple[int, float]]]] = defaultdict(lambda: defaultdict(list))
         for area in FREE_AREAS:
             active = []
             for s, entries in sorted(self.free[area].items()):
@@ -198,71 +183,20 @@ class Builder:
                                           f"{a * 100:.2f}", f"{b * 100:.2f}", f"{c * 100:.2f}",
                                           self.condition(f)])
                         areas_of[f].add(area)
-                        fish_spots[f][area].append((s, b or c))
-            self.area_page(area, active)
-            area_rows.append([f"[{AREA_NAME[area]}](areas/{area.lower()}.md)", len(active),
+            area_rows.append([f"[{AREA_NAME[area]}](../index.html#map/{area})", len(active),
                               max(max(sp.caps) for sp, _ in active),
                               len({f for _, r in active for f in r})])
         self.spot_rows, self.rate_rows = spot_rows, rate_rows
         self.tables["area-index"] = md_table(["エリア", "スポット数", "上限の最大", "魚の種類"], area_rows,
                                              ["---", "--:", "--:", "--:"])
-        self.fish_spots = fish_spots
         return areas_of
-
-    def area_page(self, area: str, active) -> None:
-        groups: dict[tuple, list] = {}
-        for sp, r in active:
-            key = tuple(sorted((f, v[3]) for f, v in r.items()))
-            groups.setdefault(key, []).append((sp, r))
-        order = sorted(groups.values(), key=lambda v: v[0][0].spot)
-        label = {}
-        for i, members in enumerate(order):
-            for sp, _ in members:
-                label[sp.spot] = _label(i)
-        adj = sorted({sp.bait_adjust for sp, _ in active})
-        lines = [f"# {AREA_NAME[area]}", "",
-                 "[湧き確率の読み方](../spawn.md) ・ [地図の読み方](../maps.md) ・ [目次](../../README.md)", "",
-                 f"![{AREA_NAME[area]}のスポット](../../images/maps/{area}.png)", "",
-                 "## スポット一覧", ""]
-        rows = []
-        for sp, _ in active:
-            rows.append([sp.spot, label[sp.spot], f"{sp.sx * 2:.0f}×{sp.sz * 2:.0f}",
-                         f"{4 * sp.sx * sp.sz:,.0f}", "/".join(str(c) for c in sp.caps),
-                         f"{60 * sp.density_a:.0f}", f"{sp.bait_adjust:+d}" if sp.bait_adjust else "0"])
-        lines.append(md_table(["スポット", "出現表", "幅×奥行 m", "面積 m²", "上限 朝/昼/夕/夜", "補充秒", "エサ補正"],
-                              rows, ["--:", ":-:", "--:", "--:", ":-:", "--:", "--:"]))
-        lines += ["", "「補充秒」は、そのスポットで魚がつつき始めてから60秒の間の補充の間隔である ([補充の速さ](../spawn-paths.md#補充の速さ))。", "",
-                  "## 出現表", ""]
-        for i, members in enumerate(order):
-            spots = [sp.spot for sp, _ in members]
-            lines.append(f"### 表{_label(i)} (スポット {compress(spots)})")
-            lines.append("")
-            r = members[0][1]
-            rows = []
-            for f, (a, b, c, w) in sorted(r.items(), key=lambda kv: (-kv[1][3], kv[0])):
-                cond = self.condition(f)
-                shown = f"{b * 100:.1f}" if b > 0 else "-"
-                rows.append([self.name(f), w, shown, f"{c * 100:.1f}", cond])
-            lines.append(md_table(["魚", "重み", "確率%", "放流解禁時%", "条件"], rows,
-                                  ["---", "--:", "--:", "--:", "---"]))
-            lines.append("")
-        (DOCS / "areas" / f"{area.lower()}.md").write_text("\n".join(lines), encoding="utf-8")
 
     # --- 外海 --------------------------------------------------------------
     def build_offshore(self, areas_of: dict[int, set[str]]) -> None:
-        rows, lines = [], []
-        lines += ["# 外海 (ペナンカパン・オーシャン)", "",
-                  "[湧き確率の読み方](../spawn.md) ・ [地図の読み方](../maps.md) ・ [目次](../../README.md)", "",
-                  "![外海の区画](../../images/trolling/offshore-zones.png)", "",
-                  "クルーザーを止めて釣るときの出現表である。船がいる区画で表が決まり、魚は船の周り ±30m に湧く。"
-                  "各区画の上限は64匹である。", ""]
         zones = {s: sp for s, sp in self.spots["Wholeisland"].items() if sp.has_rect}
-        groups: dict[tuple, list] = {}
         for s, sp in sorted(zones.items()):
-            entries = self.troll[sp.table_group]
-            r = self.rates(entries)
+            r = self.rates(self.troll[sp.table_group])
             assert 10 <= sp.table_group <= 18
-            sea = SEA_NAME[sp.table_group]
             self.spot_rows.append(["Offshore", "外海", s, round(sp.x, 1), round(sp.z, 1), round(sp.sx * 2),
                                    round(sp.sz * 2), 0, round(4 * sp.sx * sp.sz), *sp.caps,
                                    round(60 * sp.density_a, 1), sp.bait_adjust])
@@ -270,44 +204,6 @@ class Builder:
                 self.rate_rows.append(["Offshore", "外海", s, f, self.name(f), w, f"{a * 100:.2f}",
                                        f"{b * 100:.2f}", f"{c * 100:.2f}", self.condition(f)])
                 areas_of[f].add("Offshore")
-                self.fish_spots[f]["Offshore"].append((s, b or c))
-            key = tuple(sorted((f, v[3]) for f, v in r.items()))
-            groups.setdefault(key, []).append((s, sea, r))
-        for i, members in enumerate(sorted(groups.values(), key=lambda v: v[0][0])):
-            ss = [m[0] for m in members]
-            seas = sorted({m[1] for m in members})
-            lines += [f"## 区画 {compress(ss)} ({'・'.join(seas)})", ""]
-            rows = []
-            for f, (a, b, c, w) in sorted(members[0][2].items(), key=lambda kv: (-kv[1][3], kv[0])):
-                rows.append([self.name(f), w, f"{b * 100:.1f}" if b > 0 else "-", f"{c * 100:.1f}",
-                             self.condition(f)])
-            lines.append(md_table(["魚", "重み", "確率%", "放流解禁時%", "条件"], rows,
-                                  ["---", "--:", "--:", "--:", "---"]))
-            lines.append("")
-        (DOCS / "areas" / "offshore.md").write_text("\n".join(lines), encoding="utf-8")
-
-    # --- 魚から引く ---------------------------------------------------------
-    def build_index(self, routes: dict[int, list[tuple[int, int]]]) -> None:
-        rows = []
-        for f in sorted(self.fish, key=lambda x: x.name):
-            if f.id in self.never:
-                continue
-            places = []
-            for area, spots in sorted(self.fish_spots.get(f.id, {}).items(),
-                                      key=lambda kv: (kv[0] == "Offshore", kv[0])):
-                nums = [s for s, _ in spots]
-                best = max(v for _, v in spots)
-                nm = "外海" if area == "Offshore" else AREA_NAME[area]
-                page = area.lower()
-                places.append(f"[{nm}](areas/{page}.md) {compress(nums)} (最大{best * 100:.1f}%)")
-            if f.id in routes:
-                rs = compress([r for r, _ in routes[f.id]])
-                places.append(f"[トローリング](trolling.md) 航路{rs}")
-            if f.id == WAKASAGI:
-                places.append("レマック・エス・レイクの氷上の釣り")
-            assert places, f.name
-            rows.append([f.name, self.condition(f.id), "<br>".join(places)])
-        self.tables["fish-index"] = md_table(["魚", "条件", "場所 (スポット番号)"], rows)
 
     # --- ルアーの色 ----------------------------------------------------------
     def build_lure(self) -> None:
@@ -381,16 +277,6 @@ class Builder:
                                               ["--:", "---", "--:", "---"])
 
         rows = []
-        for p in sorted(pairs):
-            ls = pairs[p]
-            byname = defaultdict(list)
-            for l in ls:
-                byname[LURE_TYPES[l.type_index]].append(l.name)
-            desc = " ／ ".join(f"{t}: {'、'.join(n)}" for t, n in byname.items())
-            rows.append([pname(p), desc])
-        self.tables["color-pairs"] = md_table(["色の組", "ルアー"], rows)
-
-        rows = []
         for m in range(3):
             ls = [l for l in self.lures if l.mechanism == m]
             fams = []
@@ -400,21 +286,8 @@ class Builder:
                     fams.append(fam)
             n = sum(1 for f in self.fish if f.mechanism == m and f.id not in self.never)
             rows.append([MECHANISM[m], len(ls), n, "、".join(fams)])
-        self.tables["mechanism"] = md_table(["機構", "ルアーの数", "好む魚の数", "ルアー"], rows,
+        self.tables["mechanism"] = md_table(["仕組み", "ルアーの数", "好む魚の数", "ルアー"], rows,
                                             ["---", "--:", "--:", "---"])
-
-        rows = []
-        seen = {}
-        for l in self.lures:
-            lo, hi = l.size_range
-            key = (l.name.split(" ")[0], LURE_TYPES[l.type_index], lo, hi, f"{l.appeal:g}", l.mechanism)
-            seen.setdefault(key, 0)
-            seen[key] += 1
-        for (fam, t, lo, hi, ap, m), n in seen.items():
-            rng = f"{lo}〜{hi}" if hi else f"{lo}〜"
-            rows.append([fam, t, n, rng, ap, MECHANISM[m]])
-        self.tables["lure-families"] = md_table(["シリーズ", "系統", "色数", "反応する体長cm", "アピール基準m", "機構"], rows,
-                                                ["---", "---", "--:", ":-:", "--:", "---"])
 
     # --- エサ ---------------------------------------------------------------
     def build_bait(self) -> None:
@@ -453,7 +326,7 @@ class Builder:
         rows = []
         for b in self.baits:
             sec = b.appeal_cap / b.appeal_rate
-            rows.append([b.name, "小・中型" if b.size_mask == 3 else "大・特大型", f"{b.appeal_cap:g}",
+            rows.append([b.name, "S・M" if b.size_mask == 3 else "L・LL", f"{b.appeal_cap:g}",
                          f"{b.appeal_rate:g}", f"{sec:.1f}", f"{b.price:,}" if b.price > 0 else "非売品"])
         adj_rows = []
         for area in FREE_AREAS:
@@ -467,37 +340,14 @@ class Builder:
                 text = "、".join(f"{a:+d}: {compress(v)}".replace("+0:", "0:") for a, v in sorted(cnt.items()))
             adj_rows.append([AREA_NAME[area], text])
         self.tables["bait-adjust"] = md_table(["エリア", "補正 (枠が分かれるエリアはスポット番号つき)"], adj_rows)
-        self.tables["bait-list"] = md_table(["エサ", "対象", "アピール上限m", "増え方m/秒", "上限まで秒", "価格pt"], rows,
+        self.tables["bait-list"] = md_table(["エサ", "対象", "最大射程", "増え方(m/s)", "上限までにかかる秒数", "価格pt"], rows,
                                             ["---", "---", "--:", "--:", "--:", "--:"])
 
-        def regular(g):
-            return aff[g][0][0] >= 0
-
-        rows = []
-        for g in range(18):
-            ids = (2, 3, 4) if regular(g) else (5, 6, 7)
-            n = sum(1 for f in self.fish if f.bait_group == g and f.id not in self.never)
-            if n == 0:
-                continue
-            cells = []
-            for w in range(5):
-                vals = [sum(self.pattern[w][p] * value(aff[g][p][i], 0) for p in range(3)) for i in ids]
-                best = max(vals)
-                if best == 0:
-                    cells.append("-")
-                elif max(vals) - min(vals) < 1e-9:
-                    cells.append(f"同じ ({best:.2f})")
-                else:
-                    cells.append(f"{'赤青黄'[vals.index(best)]} ({best:.2f})")
-            other = []
-            quick, wide, rainbow = (8, 10, 12) if regular(g) else (9, 11, 13)
-            for nm, i in (("ベーシック", 1), ("クイック", quick), ("ワイド", wide), ("レインボウ", rainbow)):
-                if i is None or not regular(g) and nm == "ベーシック":
-                    continue
-                other.append(f"{nm}{value(aff[g][0][i], 0):g}")
-            rows.append([g, "レギュラー" if regular(g) else "ラージ", n] + cells + [" ".join(other)])
-        self.tables["bait-groups"] = md_table(["エサ群", "受け付けるエサ", "魚の数"] + WEATHER + ["色なしのエサの倍率"], rows,
-                                              ["--:", "---", "--:"] + ["---"] * 5 + ["---"])
+        aji = next(f for f in self.fish if self.name(f.id) == "アジ")
+        rows = [[b.name] + [f"{value(aff[aji.bait_group][p][b.id], 0):g}" for p in range(3)]
+                for b in self.baits if aff[aji.bait_group][0][b.id] >= 0]
+        self.tables["bait-example"] = md_table(["エサ", "パターン0", "パターン1", "パターン2"], rows,
+                                               ["---", "--:", "--:", "--:"])
 
     # --- トローリング ---------------------------------------------------------
     def build_trolling(self) -> dict[int, list[tuple[int, int]]]:
@@ -510,9 +360,8 @@ class Builder:
                                 for c in range(1, 13)] for i in range(5)],
             ["---"] + ["--:"] * 12)
 
-        fish_rows, sum_rows, share_rows, hit_rows, weight_rows = [], [], [], [], []
+        fish_rows, sum_rows = [], []
         routes: dict[int, list[tuple[int, int]]] = defaultdict(list)
-        target: dict[int, list] = defaultdict(list)
         for g in range(10):
             entries = self.troll[g]
             for e in entries:
@@ -523,57 +372,22 @@ class Builder:
                     if e.p[0] > 0 and e.fish not in disabled:
                         cand[e.fish] += e.p[0]
                 total = sum(cand.values())
-                per_lure = []
                 for k in range(5):
                     per = {f: w / total * hit[k][self.by_id[f].base_color] for f, w in cand.items()}
                     p = sum(per.values())
-                    per_lure.append((p, per))
                     sum_rows.append([g, SEA_NAME[g], state, k + 1, f"{p:.4f}", f"{ROD_CHECK_SEC / p:.1f}",
                                      f"{ROD_CHECK_SEC / p / 5:.1f}"])
                     for f, w in sorted(cand.items(), key=lambda kv: -per[kv[0]]):
                         fish_rows.append([g, state, k + 1, f, self.name(f), w, f"{w / total:.4f}",
                                           f"{hit[k][self.by_id[f].base_color]:g}", f"{per[f]:.4f}",
                                           f"{per[f] / p:.4f}"])
-                if state == "locked":
-                    best = max(p for p, _ in per_lure)
-                    hit_rows.append([g, SEA_NAME[g]] + [
-                        (f"**{p * 100:.1f}**" if p == best else f"{p * 100:.1f}") for p, _ in per_lure])
-                    weight_rows.append([g, SEA_NAME[g], "、".join(
-                        f"{self.name(f)} {w}" for f, w in sorted(cand.items(), key=lambda kv: (-kv[1], kv[0])))])
-                    for k, (p, per) in enumerate(per_lure):
-                        top = sorted(per.items(), key=lambda kv: -kv[1])
-                        share_rows.append([g, TROLL_LURE[k], "、".join(
-                            f"{self.name(f)} {v / p * 100:.0f}" for f, v in top)])
-                    for f, w in cand.items():
-                        target[f].append((g, w, total, [per[f] for _, per in per_lure]))
-                else:
+                if state == "unlocked":
                     for f, w in cand.items():
                         routes[f].append((g, w))
         write_csv("trolling_route_summary.csv", ["route", "sea", "stock_state", "lure", "hit_per_check",
                                                  "sec_per_bite_1rod", "sec_per_bite_5rods"], sum_rows)
         write_csv("trolling_route_fish.csv", ["route", "stock_state", "lure", "fish_id", "fish", "weight",
                                               "pick_rate", "hit_rate", "per_check", "share_of_hits"], fish_rows)
-        self.tables["troll-route-weight"] = md_table(["航路", "海域", "魚と抽選の重み"], weight_rows)
-        lengths = []
-        for r, pts in enumerate(self.g.troll_paths()):
-            loop = pts + pts[:1]
-            length = sum(math.dist(a, b) for a, b in zip(loop, loop[1:]))
-            lengths.append([r, SEA_NAME[r], f"{length:,.0f}"])
-        self.tables["troll-route-length"] = md_table(["航路", "海域", "1周の長さ m"], lengths, ["--:", "---", "--:"])
-        self.tables["troll-route-hit"] = md_table(["航路", "海域"] + [x for x in TROLL_LURE], hit_rows,
-                                                  ["--:", "---"] + ["--:"] * 5)
-        self.tables["troll-route-share"] = md_table(["航路", "ルアー", "当たったときの魚 (%)"], share_rows,
-                                                    ["--:", "---", "---"])
-
-        rows = []
-        for f in sorted(target, key=lambda x: -self.by_id[x].points):
-            fish = self.by_id[f]
-            for g, w, total, per in target[f]:
-                best = max(per)
-                rows.append([self.name(f), f"{fish.base_color}", g, f"{w}/{total}"] + [
-                    (f"**{v * 100:.2f}**" if v == best else f"{v * 100:.2f}") for v in per])
-        self.tables["troll-target"] = md_table(["魚", "色", "航路", "重み"] + [f"{i}番" for i in range(1, 6)], rows,
-                                               ["---", "--:", "--:", "--:"] + ["--:"] * 5)
         paths = self.g.troll_paths()
         write_csv("trolling_routes.csv", ["route", "index", "x", "z"],
                   [[r, i, round(x, 1), round(z, 1)] for r, pts in enumerate(paths) for i, (x, z) in enumerate(pts)])
@@ -603,7 +417,7 @@ class Builder:
         write_csv("size_band_odds.csv", ["odds_column", "first_title"] + [f"band_{r}_pct" for r in RANKS],
                   [[r + 1, groups[r].split("〜")[0].replace("以上", "")] + [pct(classes[r][b], 2) for b in range(6)]
                    for r in range(5)])
-        rows, doc, same = [], [], 0
+        rows, same = [], 0
         for f in self.fish:
             if f.base_cm <= 0:
                 continue
@@ -615,18 +429,12 @@ class Builder:
             same += b["result"][0] == b["dex"][0]
             rows.append([f.id, f.name, f.base_cm, lo, hi, *b["result"], *b["dex"],
                          f"{pr0[0] * 100:.2f}", f"{pr4[0] * 100:.2f}"])
-            if f.id not in self.never:
-                doc.append([f.name, f"{f.base_cm:g}", f"{lo:.2f}"] + [f"{v:.2f}" for v in reversed(b["result"])]
-                           + [f"{hi:.2f}"])
-        doc.sort(key=lambda r: r[0])
         write_csv("size_ranks.csv", ["fish_id", "name", "base_cm", "min_cm", "max_cm",
                                      *[f"result_{r}_cm" for r in "SABCD"], *[f"dex_{r}_cm" for r in "SABCD"],
                                      "s_pct_first_column", "s_pct_last_column"], rows)
-        self.tables["size-fish"] = md_table(["魚", "基準cm", "最小", "D下限", "C下限", "B下限", "A下限", "S下限", "最大"], doc,
-                                            ["---"] + ["--:"] * 8)
         self.tables["size-diff"] = f"{len(rows)}件のうち{len(rows) - same}件で、Sの境目が0.01cm違う。"
 
-    # --- 格付け --------------------------------------------------------------
+    # --- グレード --------------------------------------------------------------
     def build_grade(self) -> None:
         wait1, wait2 = self.g.wait_seconds()
         coef = self.g.nibble_grade_coef()
@@ -641,20 +449,20 @@ class Builder:
                          f"{coef[gr]:g}", f"{5 * coef[gr]:g}〜{15 * coef[gr]:g}", f"{run[gr]:g}",
                          f"{radar[gr][0]}〜{radar[gr][1]}"])
         self.tables["grade-table"] = md_table(
-            ["格付け", "魚の数", "経験値", "その場で待つ秒", "ウキの下で待つ秒", "つつく時間の係数", "つつく秒", "逃げる距離m", "レーダーの点の秒"],
+            ["グレード", "魚の数", "経験値", "寄り始めるまでの時間(秒)", "ウキの下にいる時間(秒)", "つつく時間の係数", "つつく時間(秒)", "逃げる距離m", "レーダーの点の時間(秒)"],
             rows, ["--:", "--:", "--:", ":-:", ":-:", "--:", ":-:", "--:", ":-:"])
         self.tables["wait-table"] = md_table(
-            ["格付け", "その場で待つ秒", "ウキの下で待つ秒", "つつく秒"],
+            ["グレード", "寄り始めるまでの時間(秒)", "ウキの下にいる時間(秒)", "つつく時間(秒)"],
             [[r[0], r[3], r[4], r[6]] for r in rows], ["--:", ":-:", ":-:", ":-:"])
         self.tables["radar-table"] = md_table(
-            ["格付け"] + [str(g) for g in range(2, 6)],
-            [["点が映る秒"] + [f"{radar[g][0]}〜{radar[g][1]}" for g in range(2, 6)]], ["---"] + [":-:"] * 4)
+            ["グレード"] + [str(g) for g in range(2, 6)],
+            [["点が映る時間(秒)"] + [f"{radar[g][0]}〜{radar[g][1]}" for g in range(2, 6)]], ["---"] + [":-:"] * 4)
         rc = self.g.nibble_rank_coef()
         self.tables["nibble-rank"] = md_table(["ランク"] + list(RANKS), [["係数"] + [f"{v:g}" for v in rc]],
                                               ["---"] + ["--:"] * 6)
         sec = self.g.nibble_bait_seconds()
         self.tables["nibble-bait"] = md_table(["エサの相性の値"] + [str(i) for i in range(6)],
-                                              [["足す秒"] + [f"{v:g}" for v in sec]], ["---"] + ["--:"] * 6)
+                                              [["足す時間(秒)"] + [f"{v:g}" for v in sec]], ["---"] + ["--:"] * 6)
 
     # --- 竿とリール -----------------------------------------------------------
     def build_tackle(self) -> None:
@@ -745,14 +553,6 @@ class Builder:
                                              ["--:", "--:", "--:", "--:", "---"])
         top = sorted(live, key=lambda f: -f.stamina)[:12]
         self.tables["stamina-top"] = "、".join(f"{f.name} {f.stamina:g}" for f in top)
-        counts = defaultdict(list)
-        for f in live:
-            counts[self.params[f.rush_index]].append(f)
-        rows = []
-        for v in sorted(counts):
-            fs = sorted(counts[v], key=lambda f: f.points)
-            rows.append([f"{v:g}", len(fs), "、".join(f.name for f in fs[-4:])])
-        self.tables["rush-table"] = md_table(["突進のしにくさ", "魚の数", "例"], rows, ["--:", "--:", "---"])
 
     # --- 天気 ----------------------------------------------------------------
     def build_weather(self) -> None:
@@ -776,13 +576,14 @@ class Builder:
         gate = self.g.size_gate_bands()
         classes = sorted({(l.type_index, l.size_range) for l in self.lures},
                          key=lambda c: (c[0], c[1][0], c[1][1] or 9999))
-        rows, doc, s_rows, s_doc = [], [], [], {}
+        rows, s_rows = [], []
         for f in self.fish:
             if f.id in self.never or f.gate_class == 3 or f.lure_mask == 0 or f.base_cm <= 0:
                 continue
+            if f.id not in areas_of:  # トローリング専用と展示専用の魚は、設定があってもルアーで釣れない
+                continue
             kmin = band_ranges(f)[5][0]
             kmax = band_ranges(f)[0][1]
-            cells: dict[int, list[str]] = defaultdict(list)
             for t, (lo, hi) in classes:
                 if not f.lure_mask >> t & 1:
                     continue
@@ -791,12 +592,7 @@ class Builder:
                 if lo_k > kmax or hi_k < kmin:
                     continue
                 full = lo_k <= kmin and kmax <= hi_k
-                cells[t].append(size_text(lo, hi) + ("" if full else "*"))
                 rows.append([f.id, f.name, LURE_TYPES[t], lo, hi or "", "all" if full else "part"])
-            doc.append([f.name, f"{f.base_cm:g}", f"{GATE_RATE[f.gate_class] * 100:.0f}%"]
-                       + [" ".join(cells[t]) or "-" for t in range(5)])
-            if f.id not in areas_of:
-                continue
             lad = rank_ladder(f)
             for l in self.lures:
                 if not f.lure_mask >> l.type_index & 1:
@@ -808,11 +604,9 @@ class Builder:
                     continue
                 if rank_result(size_from_100(first), lad) == 0:
                     s_rows.append([f.id, f.name, l.id, l.name, first / 100, kmax / 100])
-                    s_doc.setdefault(f.id, []).append(l)
-        doc.sort(key=lambda r: r[0])
         groups: dict[tuple[int, ...], list] = defaultdict(list)
         for f in self.fish:
-            if f.id in self.never or f.id in JUNK or f.gate_class == 3 or f.lure_mask == 0:
+            if f.id in self.never or f.id in JUNK or f.gate_class == 3 or f.lure_mask == 0 or f.id not in areas_of:
                 continue
             groups[tuple(t for t in range(5) if f.lure_mask >> t & 1)].append(f)
         self.tables["lure-type-groups"] = md_table(
@@ -823,24 +617,6 @@ class Builder:
             ["---", "--:", "---"])
         write_csv("fish_lure_types.csv", ["fish_id", "fish", "type", "size_min_cm", "size_max_cm", "coverage"], rows)
         write_csv("s_only_lures.csv", ["fish_id", "fish", "lure_id", "lure", "pass_min_cm", "pass_max_cm"], s_rows)
-        self.tables["fish-lures"] = md_table(["魚", "基準cm", "反応率", "スプーン", "スピナー", "クランク", "バイブ", "ミノー"], doc,
-                                             ["---", "--:", "--:", "---", "---", "---", "---", "---"])
-        rows = []
-        for fid, ls in s_doc.items():
-            f = self.by_id[fid]
-            if fid in JUNK:
-                continue
-            fams = []
-            for l in ls:
-                fam = l.name.split(" ")[0]
-                if fam not in fams:
-                    fams.append(fam)
-            lo = min(r[4] for r in s_rows if r[0] == fid)
-            hi = next(r[5] for r in s_rows if r[0] == fid)
-            rows.append([f.name, f"{f.base_cm:g}", f"{lo:.2f}〜{hi:.2f}", f"{GATE_RATE[f.gate_class] * 100:.0f}%", "、".join(fams)])
-        rows.sort(key=lambda r: (float(r[1]), r[0]))
-        self.tables["s-only"] = md_table(["魚", "基準cm", "反応する体長cm", "反応率", "ルアー"], rows,
-                                         ["---", "--:", ":-:", "--:", "---"])
 
     # --- 出現表の見出しの行で出る魚 ---------------------------------------------
     def build_head_rows(self, routes: dict[int, list[tuple[int, int]]]) -> None:
@@ -870,7 +646,7 @@ class Builder:
     # --- 受付嬢の話題 ----------------------------------------------------------
     def build_reception(self) -> None:
         topics = [("掲示板の目標の魚がいる", "目標の魚", 0x804F7474, 5, 0),
-                  ("格付け4以上の魚がいる (ゴミ以外)", "格付けが最も高い魚。同じなら後に釣った魚", 0x804F7488, 5, 0),
+                  ("グレード4以上の魚がいる (ゴミ以外)", "グレードが最も高い魚。同じなら後に釣った魚", 0x804F7488, 5, 0),
                   ("10匹以上 (ゴミも数える)", "-", 0x804F749C, 5, 0),
                   ("Sランクの魚がいる (ゴミ以外)", "最後に釣ったSの魚", 0x804F74B0, 8, 0),
                   ("Eランクの魚がいる (ゴミ以外)", "最後に釣ったEの魚", 0x804F74D0, 3, 0),
@@ -934,16 +710,12 @@ class Builder:
 
     # --- 掲示板の目標 ------------------------------------------------------------
     def build_board(self) -> None:
-        place: dict[tuple[int, str], list[str]] = {}
         rows = []
         for area, pid, fid in self.g.board_targets():
             nm = re.sub(r"[\x00-\x1f]", "", self.text[pid]).strip()
             a = AREA_NAME.get(AREA_ORDER[area], "") if area < len(AREA_ORDER) else ""
             rows.append([a, nm, fid, self.name(fid)])
-            place.setdefault((a, nm), []).append(self.name(fid))
         write_csv("board_targets.csv", ["area", "place", "fish_id", "fish"], rows)
-        self.tables["board-targets"] = md_table(["エリア", "場所", "魚"],
-                                                [[a or "-", p, "、".join(fs)] for (a, p), fs in place.items()])
 
     # --- スポットの広さと魚の数 --------------------------------------------------
     def build_density(self) -> None:
@@ -966,7 +738,7 @@ class Builder:
 
     def fill_docs(self) -> None:
         pat = re.compile(r"(<!-- table:([\w-]+) -->\n).*?(<!-- /table -->)", re.S)
-        pages = [*DOCS.glob("*.md"), *(DOCS / "areas").glob("*.md"), ROOT / "README.md",
+        pages = [*DOCS.glob("*.md"), ROOT / "README.md",
                  DATA / "README.md", ROOT / "tools/README.md"]
         for path in pages:
             if not path.exists():
@@ -982,7 +754,6 @@ class Builder:
 
     def run(self) -> None:
         DATA.mkdir(exist_ok=True)
-        (DOCS / "areas").mkdir(parents=True, exist_ok=True)
         areas_of = self.build_spawn()
         self.build_offshore(areas_of)
         write_csv("spots.csv", ["area", "area_name", "spot", "x", "z", "width_m", "depth_m", "rot_deg", "area_m2",
@@ -992,7 +763,6 @@ class Builder:
                                       "pct_standard", "pct_all_unlocked", "unlock"], self.rate_rows)
         routes = self.build_trolling()
         self.build_fish(areas_of)
-        self.build_index(routes)
         self.build_lure()
         self.build_bait()
         self.build_conditions()
@@ -1008,10 +778,6 @@ class Builder:
         self.build_calendar()
         self.build_board()
         self.fill_docs()
-
-def _label(i: int) -> str:
-    letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    return letters[i] if i < 26 else letters[i // 26 - 1] + letters[i % 26]
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)

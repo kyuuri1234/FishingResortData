@@ -17,6 +17,9 @@ from pathlib import Path
 
 DOL_BASE = 0x80004000
 # S22JAF リビジョン1 の main.dol。番地を直接読むので、別の版では誤った値になる
+# 地図画面のワープ先の一覧の位置 (0x80529AF8 からのずれ)。サフィーア・ケイブなどには一覧がない
+WARP_LISTS = {"Beach": 0x210, "BeachB": 0x288, "Jungle": 0x2D8, "JungleB": 0x314, "RiverA": 0x350,
+              "RiverB": 0x3A0, "LakeB": 0x404, "LakeA": 0x440}
 DOL_SHA256 = "80187e0beec0d5922beb8699c9ad9bf221fb60fb549552d9e1f53d0e492fd649"
 
 # エリア表の順。Wholeisland (外海) と TestStage は通常の出現表を使わない。
@@ -316,6 +319,25 @@ def flatten_dol(dol: bytes) -> bytes:
     return bytes(img)
 
 
+@dataclass
+class FishingPoint:
+    """FishingPoint の1レコード。向きを持つ箱で、u と v が水平の軸、front が前方である."""
+    file: str
+    index: int
+    x: float
+    y: float
+    z: float
+    ux: float
+    uz: float
+    vx: float
+    vz: float
+    width: float
+    depth: float
+    height: float
+    front_x: float
+    front_z: float
+
+
 class Game:
     def __init__(self, root: Path) -> None:
         self.root = Path(root)
@@ -389,7 +411,7 @@ class Game:
         return out
 
     def wait_seconds(self) -> tuple[list[tuple[int, int]], list[tuple[int, int]]]:
-        """格付け0〜5 の待ち時間 [下限, 上限] (寄る前、ウキの下)."""
+        """グレード0〜5 の待ち時間 [下限, 上限] (寄る前、ウキの下)."""
         a = self.f32s(0x804BFD20, 12)
         b = self.f32s(0x804BFD50, 12)
         return ([(int(a[i * 2]), int(a[i * 2 + 1])) for i in range(6)],
@@ -645,6 +667,44 @@ class Game:
         assert n == 54
         rows = [list(struct.unpack_from(">14i", d, 8 + i * 56)) for i in range(n)]
         return [rows[g * 3:g * 3 + 3] for g in range(18)]
+
+    def fishing_points(self, stage: int) -> list[FishingPoint]:
+        """88バイトのレコードの並び。[前方×3, 中心×3, 対角線の半分の2乗, 角×3, 上×3, v×3, u×3, 高さ, v の長さ, u の長さ]."""
+        out = []
+        for path in sorted((self.stage / f"em{stage:02d}/FishingPoint").glob(f"em{stage:02d}fa*.fpd")):
+            d = path.read_bytes()
+            assert d[:4] == b"BFPD"
+            for i in range(struct.unpack_from(">I", d, 4)[0]):
+                f = struct.unpack_from(">22f", d, 8 + i * 88)
+                out.append(FishingPoint(path.name, i, f[3], f[4], f[5], f[16], f[18], f[13], f[15],
+                                        f[21], f[20], f[19], f[0], f[2]))
+        return out
+
+    def stage_positions(self) -> dict[int, tuple[float, float]]:
+        """位置の番号から (x, z)。行は [番号, ステージ, ?, x, y, z, 向き]."""
+        d = (self.files / "PosData/StagePosData.bin").read_bytes()
+        assert d[:4] == b"SPD0"
+        out = {}
+        for i in range(struct.unpack_from(">I", d, 4)[0]):
+            pid = struct.unpack_from(">I", d, 8 + i * 28)[0]
+            x, _y, z = struct.unpack_from(">3f", d, 8 + i * 28 + 12)
+            out[pid] = (x, z)
+        return out
+
+    def map_marks(self, area: str) -> list[tuple[str, float, float]]:
+        """ホテルの出入口とワープ先。ホテルの表の行は [エリア, 部屋のステージ, 部屋の位置×2, 外の位置×2]."""
+        pos = self.stage_positions()
+        out = []
+        for i in range(9):
+            row = self.s32s(0x804D7588 + i * 0x18, 6)
+            if row[0] == AREA_ORDER.index(area):
+                out.append(("ホテル", *pos[row[4]]))
+        if area in WARP_LISTS:
+            a = 0x80529AF8 + WARP_LISTS[area]
+            while self.s32(a) != -1:  # 1行は [位置の番号, カーソルの移動先×4]
+                out.append(("ワープ", *pos[self.s32(a)]))
+                a += 0x14
+        return out
 
     def troll_paths(self) -> list[list[tuple[float, float]]]:
         d = (self.files / "Test/TrollingPath.bin").read_bytes()
