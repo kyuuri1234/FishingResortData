@@ -458,7 +458,7 @@ function viewSize(f) {
   return [
     h("h2", null, "サイズとランク"),
     h("p", { class: "note" }, `Sランクで湧く確率は、クラスで${pct(r.s_pct_first_column, 2)}から${pct(r.s_pct_last_column, 2)}へ変わる。`),
-    h("div", { class: "narrow" }, table([["ランク"], ["結果画面の下限", "num"], ["図鑑の下限", "num"]], [..."SABCD"].map(row))),
+    h("div", { class: "narrow" }, table([["ランク"], ["釣果の下限", "num"], ["図鑑の下限", "num"]], [..."SABCD"].map(row))),
   ];
 }
 

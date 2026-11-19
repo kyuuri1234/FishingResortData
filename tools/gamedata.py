@@ -203,7 +203,7 @@ def size_from_100(k: int) -> float:
 
 
 def size_borders(fish: "Fish") -> dict[str, float]:
-    """体長の範囲と S の下限 (cm)。結果画面と図鑑で比較の仕方が違う."""
+    """体長の範囲と S の下限 (cm)。釣果と図鑑で比較の仕方が違う."""
     lad = [trunc_ladder(v) for v in fish.ladder]
     s_edge = lad[0]
     kmin, kmax = round_100(lad[5]), round_100(lad[8])
@@ -220,7 +220,7 @@ def rank_ladder(fish: "Fish") -> list[float]:
 
 
 def rank_result(size: float, lad: list[float]) -> int:
-    """結果画面のランク: 100倍して切り捨てた整数どうしの比較."""
+    """釣果のランク: 100倍して切り捨てた整数どうしの比較."""
     k = math.trunc(f32(C100 * size))
     for i, f in enumerate(lad):
         if k >= math.trunc(f32(C100 * f)):
@@ -244,7 +244,7 @@ def band_ranges(fish: "Fish") -> list[tuple[int, int]]:
 
 
 def rank_borders(fish: "Fish") -> dict[str, list[float]]:
-    """S〜D の下限 (cm)。結果画面と図鑑で比較の仕方が違う."""
+    """S〜D の下限 (cm)。釣果と図鑑で比較の仕方が違う."""
     lad = rank_ladder(fish)
     ranges = band_ranges(fish)
     kmin, kmax = min(a for a, _ in ranges), max(b for _, b in ranges)
@@ -286,7 +286,7 @@ def band_offsets(width: int) -> list[int]:
 
 
 def rank_probs(fish: "Fish", classes: list[float]) -> list[float]:
-    """魚ごとのランク S〜E の確率 (結果画面の判定)."""
+    """魚ごとのランク S〜E の確率 (釣果の判定)."""
     lad = rank_ladder(fish)
     out = [0.0] * 6
     for cls, (lo, hi) in enumerate(band_ranges(fish)):
@@ -553,7 +553,7 @@ class Game:
         return out
 
     def fish_categories(self) -> dict[int, int]:
-        """結果画面での持ち方 (fishResult.bin の +0)。0 手のひら、1 糸、2 両手、3 水中."""
+        """釣果での持ち方 (fishResult.bin の +0)。0 手のひら、1 糸、2 両手、3 水中."""
         d = (self.files / "Fish/fishResult.bin").read_bytes()
         _, n = struct.unpack(">II", d[:8])
         return {i: struct.unpack_from(">i", d, 8 + i * 36)[0] for i in range(n)}

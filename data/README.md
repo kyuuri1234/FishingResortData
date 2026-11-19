@@ -47,9 +47,9 @@
 トローリング専用の魚にも `lure_types` と `lure_accept_rate` の値があるが、ルアーでは釣れないので使われない。
 `mechanism` は好むアピールの種類で、0が汎用、1がラトル、2が振動である (`lures.csv` も同じ)。
 `lure_accept_rate` はルアーの[反応率](../docs/lure-color.md#ルアーの種類と体長)である。
-`hold` は結果画面の持ち方、`pull_class` は[引きの強さの区分](../docs/fight.md#魚ごとの引き)、`pull_speed_a`, `pull_speed_b` はその速さA・B、`stamina` は粘りの値、`speed_coef` は基準サイズに対する個体の大きさに掛かる速さの係数、`rush_threshold`, `rush_div` はファイト中の加速の起きやすさに関わる値、`speed_cap` は小さい魚の速さを抑える係数である。
+`hold` は釣果の持ち方、`pull_class` は[引きの強さの区分](../docs/fight.md#魚ごとの引き)、`pull_speed_a`, `pull_speed_b` はその速さA・B、`stamina` は粘りの値、`speed_coef` は基準サイズに対する個体の大きさに掛かる速さの係数、`rush_threshold`, `rush_div` はファイト中の加速の起きやすさに関わる値、`speed_cap` は小さい魚の速さを抑える係数である。
 
-**size_ranks.csv**: `result_*_cm` は結果画面、`dex_*_cm` は図鑑の判定の下限である。
+**size_ranks.csv**: `result_*_cm` は釣果、`dex_*_cm` は図鑑の判定の下限である。
 
 **fish_lure_types.csv**: `coverage` は、その範囲に全個体が入るなら `all`、一部の個体だけなら `part` である。
 
