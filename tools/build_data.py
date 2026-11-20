@@ -436,6 +436,7 @@ class Builder:
             ["グレード"] + [str(g) for g in range(2, 6)],
             [["表示時間(秒)"] + [f"{radar[g][0]}〜{radar[g][1]}" for g in range(2, 6)]], ["---"] + [":-:"] * 4)
         rc = self.g.nibble_rank_coef()
+        write_csv("nibble_ranks.csv", ["rank", "coefficient"], [[r, f"{v:g}"] for r, v in zip(RANKS, rc)])
         self.tables["nibble-rank"] = md_table(["ランク"] + list(RANKS), [["係数"] + [f"{v:g}" for v in rc]],
                                               ["---"] + ["--:"] * 6)
         sec = self.g.nibble_bait_seconds()

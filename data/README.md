@@ -21,7 +21,7 @@
 | `color_shift.csv` | 天気ごとの好きな色のずれの確率 |
 | `lure_color_scores.csv` | 基準色・天気・ルアーごとの色の倍率の期待値 |
 | `baits.csv`, `bait_affinity.csv`, `bait_by_weather.csv` | エサの性能と相性 |
-| `nibble_grades.csv`, `nibble_bait_seconds.csv` | ウキをつつく時間 |
+| `nibble_grades.csv`, `nibble_ranks.csv`, `nibble_bait_seconds.csv` | ウキをつつく時間 |
 | `trolling_lure_color.csv` | トローリングルアーと魚の色のヒット確率 |
 | `trolling_route_summary.csv`, `trolling_route_fish.csv` | 航路とルアーごとのヒットの確率と魚の内訳 |
 | `trolling_routes.csv` | 航路の座標 |
@@ -61,6 +61,8 @@
 **bait_by_weather.csv**: 倍率を天気ごとのパターンの確率で平均した値で、`multiplier_adjust_0` が補正なし、`multiplier_adjust_plus1` が補正+1、`multiplier_adjust_minus` が補正-1と-2のスポットの値である。
 
 **nibble_grades.csv**: `coefficient` はグレードの係数、`min_sec`, `max_sec` はランクC以下のつつく時間である。
+
+**nibble_ranks.csv**: `coefficient` はランクの係数で、つつく時間 (エサの分を除く) に掛かる。
 
 **nibble_bait_seconds.csv**: `value` はサービスベイトの相性の値、`bait_adjust` はスポットの補正、`adjusted_value` は補正後の値、`seconds` は足される秒数である。
 
