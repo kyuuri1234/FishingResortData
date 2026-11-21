@@ -1,6 +1,6 @@
 # ファミリーフィッシング 解析データ
 
-魚、釣り場、ルアー、トローリング航路の値を調べられる[検索ページ](index.html)を用意しています。
+魚、釣り場、ルアー、トローリング航路の値を調べられる[検索ページ](https://kyuuri1234.github.io/FishingResortData/)を用意しています。
 
 このリポジトリは、Wii『ファミリーフィッシング』の解析によって得られた情報を公開するものです。
 
@@ -10,7 +10,7 @@
 
 | 内容 | ドキュメント |
 |---|---|
-| 魚と湧き場所の関係 | [検索ページ](index.html) |
+| 魚と湧き場所の関係 | [検索ページ](https://kyuuri1234.github.io/FishingResortData/) |
 | 場所と湧く魚、量の関係 | [エリアの一覧と地図](docs/maps.md) |
 | 確率、時間帯、魚の数の上限 | [魚の湧き方](docs/spawn.md) |
 | 魚の湧き方の種類と補充 | [湧き方の種類](docs/spawn-paths.md) |
@@ -31,7 +31,7 @@
 |---|---|
 | 仕掛けへの反応と食いつきの流れ | [魚が近づいて食いつくまで](docs/bite.md) |
 | 魚のルアーに対する好み | [ルアーの色と好み](docs/lure-color.md) |
-| 魚とルアーの検索と、S確ルアーの一覧 | [検索ページ](index.html)、[説明](docs/fish-lures.md) |
+| 魚とルアーの検索と、S確ルアーの一覧 | [検索ページ](https://kyuuri1234.github.io/FishingResortData/)、[説明](docs/fish-lures.md) |
 | 赤青黄色 | [エサの好み](docs/bait.md) |
 | 竿/リールの性能 | [竿とリール](docs/tackle.md) |
 | テンションゲージ、糸切れ、釣り上げ | [ファイト](docs/fight.md) |

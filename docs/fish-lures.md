@@ -21,7 +21,7 @@
 
 ## 使えるルアーの一覧
 
-魚ごとに使えるルアーは[検索ページ](../index.html)で検索できる。
+魚ごとに使えるルアーは[検索ページ](https://kyuuri1234.github.io/FishingResortData/)で検索できる。
 全部の値は [fish_lure_types.csv](../data/fish_lure_types.csv) にある。
 
 ## Sランクだけが反応する組み合わせ
@@ -30,7 +30,7 @@
 
 当てはまるのは、基準40cmの魚と50cm以上のルアー、基準120cmの魚と150cm以上のルアーの2通りである。
 
-当てはまる魚は[検索ページ](../index.html)の「S確定」で検索できる。
+当てはまる魚は[検索ページ](https://kyuuri1234.github.io/FishingResortData/)の「S確定」で検索できる。
 
 Sの境目から49.99cmまたは149.99cmまでのSの個体は、範囲の外なので反応しない。
 これはSの個体の約2%である。

@@ -9,23 +9,23 @@
 <!-- table:area-index -->
 | エリア | スポット数 | 魚の種類 |
 |---|--:|--:|
-| [トゥマン・パラダイスビーチ](../index.html#map/Beach) | 50 | 41 |
-| [パナス・ジャングル](../index.html#map/Jungle) | 47 | 20 |
-| [ティドゥール・リバー](../index.html#map/RiverA) | 64 | 19 |
-| [カナン・レイク](../index.html#map/LakeA) | 78 | 22 |
-| [ケリキル・リバー](../index.html#map/RiverB) | 32 | 14 |
-| [サフィーア・ケイブ](../index.html#map/Bluecave) | 11 | 16 |
-| [ドゥアリブ・レイク](../index.html#map/LakeB) | 63 | 23 |
-| [マラム・ジャングル](../index.html#map/JungleB) | 31 | 18 |
-| [パチャール・ビーチ](../index.html#map/BeachB) | 31 | 29 |
-| [スンビラン・アイランド](../index.html#map/IslandA) | 22 | 23 |
-| [スプール・アイランド](../index.html#map/IslandB) | 23 | 15 |
-| [グナン・エス・リバー](../index.html#map/Submap01) | 5 | 4 |
-| [パータパ・リバー](../index.html#map/Submap03) | 7 | 3 |
-| [ラハージャ・レイク](../index.html#map/Submap04) | 4 | 6 |
+| [トゥマン・パラダイスビーチ](https://kyuuri1234.github.io/FishingResortData/#map/Beach) | 50 | 41 |
+| [パナス・ジャングル](https://kyuuri1234.github.io/FishingResortData/#map/Jungle) | 47 | 20 |
+| [ティドゥール・リバー](https://kyuuri1234.github.io/FishingResortData/#map/RiverA) | 64 | 19 |
+| [カナン・レイク](https://kyuuri1234.github.io/FishingResortData/#map/LakeA) | 78 | 22 |
+| [ケリキル・リバー](https://kyuuri1234.github.io/FishingResortData/#map/RiverB) | 32 | 14 |
+| [サフィーア・ケイブ](https://kyuuri1234.github.io/FishingResortData/#map/Bluecave) | 11 | 16 |
+| [ドゥアリブ・レイク](https://kyuuri1234.github.io/FishingResortData/#map/LakeB) | 63 | 23 |
+| [マラム・ジャングル](https://kyuuri1234.github.io/FishingResortData/#map/JungleB) | 31 | 18 |
+| [パチャール・ビーチ](https://kyuuri1234.github.io/FishingResortData/#map/BeachB) | 31 | 29 |
+| [スンビラン・アイランド](https://kyuuri1234.github.io/FishingResortData/#map/IslandA) | 22 | 23 |
+| [スプール・アイランド](https://kyuuri1234.github.io/FishingResortData/#map/IslandB) | 23 | 15 |
+| [グナン・エス・リバー](https://kyuuri1234.github.io/FishingResortData/#map/Submap01) | 5 | 4 |
+| [パータパ・リバー](https://kyuuri1234.github.io/FishingResortData/#map/Submap03) | 7 | 3 |
+| [ラハージャ・レイク](https://kyuuri1234.github.io/FishingResortData/#map/Submap04) | 4 | 6 |
 <!-- /table -->
 
-外海は[検索ページ](../index.html#map/Offshore)、トローリングは[トローリングのページ](trolling.md)にある。
+外海は[検索ページ](https://kyuuri1234.github.io/FishingResortData/#map/Offshore)、トローリングは[トローリングのページ](trolling.md)にある。
 
 レマック・エス・レイクはワカサギ釣り専用の湧き方なので、ここには載せていない。
 

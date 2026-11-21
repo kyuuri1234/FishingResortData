@@ -23,6 +23,7 @@ from gamedata import (AREA_NAME, AREA_ORDER, EXHIBIT, FREE_AREAS, GATE_RATE, JUN
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data"
 DOCS = ROOT / "docs"
+SITE = "https://kyuuri1234.github.io/FishingResortData/"
 
 WEATHER = ["快晴", "晴れ", "薄曇り", "曇り", "厚い曇り"]
 BANDS = ["朝", "昼", "夕", "夜"]
@@ -168,7 +169,7 @@ class Builder:
                                           f"{a * 100:.2f}", f"{b * 100:.2f}", f"{c * 100:.2f}",
                                           self.condition(f)])
                         areas_of[f].add(area)
-            area_rows.append([f"[{AREA_NAME[area]}](../index.html#map/{area})", len(active),
+            area_rows.append([f"[{AREA_NAME[area]}]({SITE}#map/{area})", len(active),
                               len({f for _, r in active for f in r})])
         self.spot_rows, self.rate_rows = spot_rows, rate_rows
         self.tables["area-index"] = md_table(["エリア", "スポット数", "魚の種類"], area_rows,

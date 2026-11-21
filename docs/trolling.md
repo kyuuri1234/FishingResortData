@@ -39,7 +39,7 @@
 <!-- /table -->
 
 どの組み合わせも確率は5%以上あるので、どのルアーでも、その航路の魚は全てかかる。
-魚の基準色は[検索ページ](../index.html)の魚のページから調べられる。
+魚の基準色は[検索ページ](https://kyuuri1234.github.io/FishingResortData/)の魚のページから調べられる。
 
 ## 航路
 
@@ -59,7 +59,7 @@
 
 ## 航路ごとの魚
 
-航路ごとの魚、ルアーごとのヒットする確率と魚の割合は、[検索ページ](../index.html)のトローリングから検索できる。
+航路ごとの魚、ルアーごとのヒットする確率と魚の割合は、[検索ページ](https://kyuuri1234.github.io/FishingResortData/)のトローリングから検索できる。
 魚ごとの確率は魚のページから調べられる。
 全部の値は [trolling_route_fish.csv](../data/trolling_route_fish.csv) と [trolling_route_summary.csv](../data/trolling_route_summary.csv) から参照できる。
 
